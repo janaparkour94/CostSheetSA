@@ -19,8 +19,6 @@
       --red-bg: #fef2f2;
       --amber: #d97706;
       --amber-bg: #fffbeb;
-      --blue: #0284c7;
-      --blue-bg: #f0f9ff;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -55,7 +53,7 @@
       background: rgba(255, 255, 255, 0.2);
       backdrop-filter: blur(6px);
       display: grid; place-items: center;
-      font-weight: 800; font-size: 20px;
+      font-weight: 800; font-size: 18px;
     }
     h1 { font-size: 1.35rem; font-weight: 800; letter-spacing: -0.01em; }
     .subtitle { font-size: 0.85rem; opacity: 0.9; margin-top: 2px; }
@@ -255,21 +253,21 @@
 <div class="container">
   <header>
     <div class="brand">
-      <div class="logo">₹</div>
+      <div class="logo">📊</div>
       <div>
         <h1>Cost & Calculation Sheet</h1>
         <div class="subtitle">Live transparent ledger synced directly from the organizing sheet</div>
       </div>
     </div>
     <div class="header-right">
-      <span id="lastUpdated" class="timestamp-pill">Syncing data...</span>
+      <span id="lastUpdated" class="timestamp-pill">Loading sheet...</span>
       <button class="btn-refresh" onclick="loadSheet()">↻ Refresh</button>
     </div>
   </header>
 
   <div id="errorBox" class="error-banner"></div>
 
-  <!-- Dynamic Summary Cards (Auto-calculated from numeric columns) -->
+  <!-- Dynamic Summary Cards (Auto-calculated from numeric columns, no currency symbol added) -->
   <section id="kpiGrid" class="kpi-grid"></section>
 
   <!-- Dynamic Full-Sheet Table -->
@@ -290,12 +288,11 @@
   </section>
 
   <footer>
-    Auto-synced from Google Sheets • Negative balances are highlighted in red • Zero manual edits on web page
+    Synced directly from Google Sheets • Negative values are highlighted in red • Zero manual edits on web page
   </footer>
 </div>
 
 <script>
-  // Your exact Google Sheet URL (automatically reads the first/default tab without needing tab or column names)
   const SHEET_URL = "https://docs.google.com/spreadsheets/d/19mu_x9PvMlcEhH4F44el_DMwYzRB2cj_dZztz2yTpKU/edit?usp=sharing";
 
   let headers = [];
@@ -305,7 +302,6 @@
   function getCsvUrl(sheetUrl) {
     const match = sheetUrl.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
     if (!match) return null;
-    // Omitting 'gid' automatically fetches the first tab of the Google Sheet
     return `https://docs.google.com/spreadsheets/d/${match[1]}/gviz/tq?tqx=out:csv&_t=${Date.now()}`;
   }
 
@@ -335,7 +331,6 @@
     if (val === null || val === undefined) return NaN;
     const str = String(val).trim();
     if (!str) return NaN;
-    // Handle accounting negatives like (500) or -500 or -₹500
     const isParenNeg = /^\(.*\)$/.test(str);
     const cleaned = str.replace(/[₹$,%\s()]/g, "");
     if (!cleaned || isNaN(Number(cleaned))) return NaN;
@@ -343,22 +338,36 @@
     return isParenNeg ? -Math.abs(num) : num;
   }
 
-  function formatTimestamp(date) {
-    return date.toLocaleString("en-IN", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit"
-    });
+  // Finds any "Last Updated" label + timestamp in the sheet (either in a row or column)
+  function extractSheetLastUpdated(matrix) {
+    // 1. Check if any column header itself is "Last Updated" / "Updated On"
+    const headerIdx = matrix[0].findIndex(h => /^(last\s*updated|updated\s*(on|at)|last\s*synced)$/i.test(h.trim()));
+    if (headerIdx !== -1) {
+      for (let r = 1; r < matrix.length; r++) {
+        const val = (matrix[r][headerIdx] || "").trim();
+        if (val) return val;
+      }
+    }
+
+    // 2. Check if any row has "Last Updated" in one cell and the timestamp in the next cell
+    for (let r = 0; r < matrix.length; r++) {
+      for (let c = 0; c < matrix[r].length; c++) {
+        const cell = (matrix[r][c] || "").trim();
+        if (/^last\s*updated\s*:?$/i.test(cell) && matrix[r][c + 1]) {
+          return matrix[r][c + 1].trim();
+        }
+        const inlineMatch = cell.match(/^last\s*updated\s*:\s*(.+)$/i);
+        if (inlineMatch) return inlineMatch[1].trim();
+      }
+    }
+    return null;
   }
 
   async function loadSheet() {
     const statusEl = document.getElementById("lastUpdated");
     const errorBox = document.getElementById("errorBox");
     errorBox.style.display = "none";
-    statusEl.textContent = "Syncing...";
+    statusEl.textContent = "Loading sheet...";
 
     const csvUrl = getCsvUrl(SHEET_URL);
     if (!csvUrl) {
@@ -380,10 +389,12 @@
         throw new Error("The sheet appears empty or only has a header row.");
       }
 
-      headers = matrix[0];
-      rowsData = matrix.slice(1);
+      // Extract backend sheet timestamp if present, and exclude metadata-only "Last Updated" rows from the main table
+      const sheetUpdatedTime = extractSheetLastUpdated(matrix);
 
-      // Detect which columns contain numbers so they auto-align right and highlight negatives
+      headers = matrix[0];
+      rowsData = matrix.slice(1).filter(r => !/^last\s*updated\s*:?$/i.test((r[0] || "").trim()));
+
       numericColFlags = headers.map((_, colIdx) => {
         let numCount = 0, nonEmpty = 0;
         rowsData.forEach(r => {
@@ -399,9 +410,11 @@
       renderKPIs();
       renderTable();
 
-      statusEl.textContent = `Last updated: ${formatTimestamp(new Date())}`;
+      statusEl.textContent = sheetUpdatedTime
+        ? `Sheet Updated: ${sheetUpdatedTime}`
+        : "Live Google Sheet";
     } catch (err) {
-      showError(`Unable to load sheet (${err.message}). If opening from Downloads, run via localhost or GitHub Pages.`);
+      showError(`Unable to load sheet (${err.message}).`);
       statusEl.textContent = "Sync failed";
     }
   }
@@ -412,7 +425,7 @@
     errorBox.style.display = "block";
   }
 
-  // Automatically creates summary cards for up to 4 numeric columns (skipping Total rows so it doesn't double-count)
+  // Auto-generates summary cards without adding any currency symbols
   function renderKPIs() {
     const kpiGrid = document.getElementById("kpiGrid");
     const nonTotalRows = rowsData.filter(r => {
@@ -423,7 +436,6 @@
     const cards = [];
     headers.forEach((header, idx) => {
       if (!numericColFlags[idx] || !header) return;
-      // Skip ID/Serial/Count-like headers if there are better currency/amount columns
       if (/^(s\.?no|sl|#|id|sr)$/i.test(header.trim())) return;
 
       const sum = nonTotalRows.reduce((acc, r) => {
@@ -431,7 +443,6 @@
         return acc + (isNaN(n) ? 0 : n);
       }, 0);
 
-      // If the sheet already has a "Total" row at the bottom, prefer that exact calculated cell
       const totalRow = rowsData.find(r => /^(total|grand total|net balance|balance)/i.test((r[0] || "").trim()));
       const totalCellVal = totalRow ? parseNumber(totalRow[idx]) : NaN;
       const displayVal = !isNaN(totalCellVal) ? totalCellVal : sum;
@@ -439,14 +450,14 @@
       cards.push({ label: header, value: displayVal });
     });
 
-    kpiGrid.innerHTML = cards.slice(0, 4).map(c => {
+    kpiGrid.innerHTML = cards.slice(0, 6).map(c => {
       const isNeg = c.value < 0;
-      const formatted = (isNeg ? "-₹" : "₹") + Math.abs(c.value).toLocaleString("en-IN", { maximumFractionDigits: 2 });
+      const formatted = (isNeg ? "-" : "") + Math.abs(c.value).toLocaleString("en-IN", { maximumFractionDigits: 2 });
       return `
         <div class="kpi-card">
           <div class="kpi-label">${escapeHtml(c.label)}</div>
           <div class="kpi-value" style="color:${isNeg ? "var(--red)" : "var(--text)"}">${formatted}</div>
-          <div class="kpi-sub">Auto-calculated from sheet</div>
+          <div class="kpi-sub">Total from sheet</div>
         </div>
       `;
     }).join("");
@@ -486,12 +497,10 @@
     const trimmed = String(raw).trim();
     if (!trimmed) return `<td class="${isNumericCol ? "num" : ""}">—</td>`;
 
-    // 1. Clickable URLs (e.g., bill photos/receipts in Drive)
     if (/^https?:\/\//i.test(trimmed)) {
       return `<td><a class="ext-link" href="${escapeHtml(trimmed)}" target="_blank" rel="noopener">View Link ↗</a></td>`;
     }
 
-    // 2. Numeric cells (highlight negative values in red)
     const num = parseNumber(trimmed);
     if (isNumericCol || !isNaN(num)) {
       if (!isNaN(num)) {
@@ -502,7 +511,6 @@
       }
     }
 
-    // 3. Common status words get colored pills automatically
     if (/^(paid|settled|approved|done|completed)$/i.test(trimmed)) {
       return `<td><span class="pill pill-green">${escapeHtml(trimmed)}</span></td>`;
     }
