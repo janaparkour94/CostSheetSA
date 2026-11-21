@@ -30,15 +30,15 @@
       padding: 16px;
     }
 
-    .container { max-width: 1120px; margin: 0 auto; }
+    .container { max-width: 1180px; margin: 0 auto; }
 
     /* Header Banner */
     header {
       background: var(--primary-grad);
       color: #ffffff;
-      padding: 22px 24px;
+      padding: 20px 24px;
       border-radius: 16px;
-      margin-bottom: 20px;
+      margin-bottom: 16px;
       display: flex;
       flex-wrap: wrap;
       justify-content: space-between;
@@ -49,14 +49,14 @@
 
     .brand { display: flex; align-items: center; gap: 14px; }
     .logo {
-      width: 46px; height: 46px; border-radius: 12px;
+      width: 44px; height: 44px; border-radius: 12px;
       background: rgba(255, 255, 255, 0.2);
       backdrop-filter: blur(6px);
       display: grid; place-items: center;
       font-weight: 800; font-size: 18px;
     }
-    h1 { font-size: 1.35rem; font-weight: 800; letter-spacing: -0.01em; }
-    .subtitle { font-size: 0.85rem; opacity: 0.9; margin-top: 2px; }
+    h1 { font-size: 1.3rem; font-weight: 800; letter-spacing: -0.01em; }
+    .subtitle { font-size: 0.84rem; opacity: 0.9; margin-top: 2px; }
 
     .header-right {
       display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
@@ -92,45 +92,48 @@
       border: 1px solid #fecaca;
       padding: 14px 18px;
       border-radius: 12px;
-      margin-bottom: 18px;
+      margin-bottom: 16px;
       font-size: 0.9rem;
       font-weight: 500;
     }
 
-    /* Auto-Generated KPI Cards */
+    /* Compact Auto-Generated KPI Cards */
     .kpi-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 14px;
-      margin-bottom: 20px;
+      grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+      gap: 10px;
+      margin-bottom: 18px;
     }
     .kpi-card {
       background: var(--surface);
-      border-radius: 14px;
-      padding: 18px;
+      border-radius: 10px;
+      padding: 11px 13px;
       border: 1px solid var(--border);
-      border-top: 4px solid var(--primary);
-      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.03);
+      border-top: 3px solid var(--primary);
+      box-shadow: 0 2px 6px rgba(15, 23, 42, 0.03);
     }
-    .kpi-card:nth-child(2) { border-top-color: #0ea5e9; }
-    .kpi-card:nth-child(3) { border-top-color: #10b981; }
-    .kpi-card:nth-child(4) { border-top-color: #f59e0b; }
-    .kpi-card:nth-child(5) { border-top-color: #8b5cf6; }
+    .kpi-card:nth-child(5n+2) { border-top-color: #0ea5e9; }
+    .kpi-card:nth-child(5n+3) { border-top-color: #10b981; }
+    .kpi-card:nth-child(5n+4) { border-top-color: #f59e0b; }
+    .kpi-card:nth-child(5n+5) { border-top-color: #8b5cf6; }
 
     .kpi-label {
-      font-size: 0.78rem;
+      font-size: 0.7rem;
       color: var(--muted);
       font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: 0.04em;
+      letter-spacing: 0.03em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .kpi-value {
-      font-size: 1.55rem;
+      font-size: 1.2rem;
       font-weight: 800;
-      margin-top: 6px;
+      margin-top: 3px;
       font-variant-numeric: tabular-nums;
     }
-    .kpi-sub { font-size: 0.78rem; color: var(--muted); margin-top: 4px; }
+    .kpi-sub { font-size: 0.68rem; color: var(--muted); margin-top: 2px; }
 
     /* Main Table Panel */
     .panel {
@@ -267,7 +270,7 @@
 
   <div id="errorBox" class="error-banner"></div>
 
-  <!-- Dynamic Summary Cards (Auto-calculated from numeric columns, no currency symbol added) -->
+  <!-- Compact Summary Cards (Shows all numeric columns automatically) -->
   <section id="kpiGrid" class="kpi-grid"></section>
 
   <!-- Dynamic Full-Sheet Table -->
@@ -338,9 +341,7 @@
     return isParenNeg ? -Math.abs(num) : num;
   }
 
-  // Finds any "Last Updated" label + timestamp in the sheet (either in a row or column)
   function extractSheetLastUpdated(matrix) {
-    // 1. Check if any column header itself is "Last Updated" / "Updated On"
     const headerIdx = matrix[0].findIndex(h => /^(last\s*updated|updated\s*(on|at)|last\s*synced)$/i.test(h.trim()));
     if (headerIdx !== -1) {
       for (let r = 1; r < matrix.length; r++) {
@@ -349,7 +350,6 @@
       }
     }
 
-    // 2. Check if any row has "Last Updated" in one cell and the timestamp in the next cell
     for (let r = 0; r < matrix.length; r++) {
       for (let c = 0; c < matrix[r].length; c++) {
         const cell = (matrix[r][c] || "").trim();
@@ -389,7 +389,6 @@
         throw new Error("The sheet appears empty or only has a header row.");
       }
 
-      // Extract backend sheet timestamp if present, and exclude metadata-only "Last Updated" rows from the main table
       const sheetUpdatedTime = extractSheetLastUpdated(matrix);
 
       headers = matrix[0];
@@ -425,7 +424,7 @@
     errorBox.style.display = "block";
   }
 
-  // Auto-generates summary cards without adding any currency symbols
+  // Renders all numeric columns without slicing off the last ones
   function renderKPIs() {
     const kpiGrid = document.getElementById("kpiGrid");
     const nonTotalRows = rowsData.filter(r => {
@@ -450,14 +449,14 @@
       cards.push({ label: header, value: displayVal });
     });
 
-    kpiGrid.innerHTML = cards.slice(0, 6).map(c => {
+    kpiGrid.innerHTML = cards.map(c => {
       const isNeg = c.value < 0;
       const formatted = (isNeg ? "-" : "") + Math.abs(c.value).toLocaleString("en-IN", { maximumFractionDigits: 2 });
       return `
-        <div class="kpi-card">
+        <div class="kpi-card" title="${escapeHtml(c.label)}">
           <div class="kpi-label">${escapeHtml(c.label)}</div>
           <div class="kpi-value" style="color:${isNeg ? "var(--red)" : "var(--text)"}">${formatted}</div>
-          <div class="kpi-sub">Total from sheet</div>
+          <div class="kpi-sub">Total</div>
         </div>
       `;
     }).join("");
